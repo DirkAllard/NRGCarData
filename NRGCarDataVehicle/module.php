@@ -29,20 +29,39 @@ class NRGCarDataVehicle extends IPSModule
             'vehicle.drivetrain.lastRemainingRange',
             'vehicle.drivetrain.electricEngine.remainingElectricRange',
         ],
+        'connected' => [
+            'vehicle.body.chargingPort.status',
+            'vehicle.body.chargingPort.combinedStatus',
+            'vehicle.drivetrain.electricEngine.charging.connectorStatus',
+            'vehicle.powertrain.tractionBattery.charging.port.rearMiddle.isPlugged',
+            'vehicle.powertrain.tractionBattery.charging.port.rearRight.isPlugged',
+        ],
+        'chargePowerW' => ['vehicle.powertrain.electric.battery.charging.power'],
+        'chargeTimeRemainingMin' => ['vehicle.drivetrain.electricEngine.charging.timeRemaining'],
+        'chargeAmpsRequest' => ['vehicle.powertrain.electric.battery.charging.acLimit.selected'],
+        'chargeAmpsMax' => ['vehicle.powertrain.electric.battery.charging.acLimit.max'],
+        'bidirectionalCapable' => ['vehicle.powertrain.electric.battery.biDirectionalCharging.availability'],
+        'dischargeAllowed' => ['vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.dischargeAllowed'],
+        'targetSocProfessionalPercent' => ['vehicle.powertrain.electric.battery.stateOfCharge.targetSoCForProfessionalMode'],
+        'departureRelevant' => ['vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.departureTimeRelevant'],
     ];
 
     public function Create()
     {
         parent::Create();
         $this->RegisterPropertyInteger('SourceInstanceID', 0);
+        $this->RegisterPropertyFloat('BatteryCapacityKwh', 0.0);
+        // Legacy image attribute is kept only to clear or migrate existing data.
         $this->RegisterAttributeString('CachedVehicleImage', '');
         $this->RegisterAttributeString('CachedImageIdentity', '');
+        $this->RegisterAttributeString('CachedMediaIdentity', '');
         $this->RegisterAttributeInteger('ImageLastAttempt', 0);
     }
 
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+        $this->migrateLegacyImage();
         $source = $this->sourceInstanceID();
         if ($source === 0) {
             $this->SetStatus(200); // CarData source not selected
@@ -74,6 +93,11 @@ class NRGCarDataVehicle extends IPSModule
             ],
             'elements' => [
                 ['type' => 'Select', 'name' => 'SourceInstanceID', 'caption' => 'BMW CarData Fahrzeuginstanz', 'options' => $options],
+                [
+                    'type' => 'NumberSpinner', 'name' => 'BatteryCapacityKwh',
+                    'caption' => 'Nutzbare Batteriekapazität (kWh; 0 = unbekannt)',
+                    'minimum' => 0, 'digits' => 1, 'suffix' => 'kWh',
+                ],
             ],
         ], JSON_UNESCAPED_UNICODE);
     }
@@ -81,8 +105,8 @@ class NRGCarDataVehicle extends IPSModule
     /**
      * NRG vehicle contract (1.6, read-only subset).
      * Unknown values are null, unknown Symcon variable IDs are 0.
-     * 'connected' describes vehicle availability in Tessie; CarData does not
-     * provide equivalent evidence, so it is deliberately null here.
+     * This legacy 1.6 contract is kept for existing consumers. The NRG-Stack
+     * 1.0 contract is independently available through GetVehicleData().
      */
     public function GetVehicleState(): string
     {
@@ -129,6 +153,157 @@ class NRGCarDataVehicle extends IPSModule
             'socUpdatedAt' => $socVar > 0 ? $this->updatedAt($socVar) : null,
             'chargingUpdatedAt' => $chargingVar > 0 ? $this->updatedAt($chargingVar) : null,
         ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    }
+
+    /**
+     * Manufacturer-neutral NRG-Stack vehicle contract 1.0. The full contract
+     * is independent of the HTML tile and its limited set of subscriptions.
+     * Every known contract key is present; unavailable measurements are null.
+     */
+    public function GetVehicleData(): string
+    {
+        $v = json_decode($this->GetVehicleState(), true) ?: [];
+        $source = $this->sourceInstanceID();
+        $source = $this->isBMWVehicle($source) ? $source : 0;
+        $charging = $v['charging'] ?? null;
+        $connected = $this->connectionState($source);
+        if ($connected === null && $charging === true) {
+            $connected = true;
+        }
+        $capacity = $this->ReadPropertyFloat('BatteryCapacityKwh');
+        $capacity = is_finite($capacity) && $capacity > 0.0 && $capacity <= 300.0 ? $capacity : null;
+        $power = $this->firstNumeric($source, self::FIELD_KEYS['chargePowerW'], 0.0, 500000.0);
+        $time = $charging === true
+            ? $this->firstNumeric($source, self::FIELD_KEYS['chargeTimeRemainingMin'], 0.0, 10000.0)
+            : null;
+        $limit = $v['chargeLimit'] ?? null;
+        $state = $this->chargeState($source);
+
+        return json_encode([
+            'contractType' => 'vehicle',
+            'contractVersion' => '1.0',
+            'instanceID' => $this->InstanceID,
+            'name' => IPS_GetName($this->InstanceID),
+            'provider' => 'BMW CarData',
+            // Required: never use 0 as a substitute for missing measurements.
+            'soc' => $v['soc'] ?? null,
+            'connected' => $connected,
+            'charging' => $charging,
+            'chargeLimit' => $limit === null ? null : (int) round((float) $limit),
+            'atHome' => null,
+            'batteryCapacityKwh' => $capacity,
+            'lastSeenAt' => $this->lastSeenAt($source),
+            'socID' => (int) ($v['socID'] ?? 0),
+            'chargingID' => (int) ($v['chargingID'] ?? 0),
+            // Optional fields from the same contract, including V2H fields.
+            'vin' => $v['vin'] ?? '',
+            'manufacturer' => null,
+            'powertrain' => null,
+            'chargeState' => $state,
+            'chargePowerW' => $charging === false ? 0.0 : ($power['value'] ?? null),
+            'chargeAmpsRequest' => $this->firstNumeric($source, self::FIELD_KEYS['chargeAmpsRequest'], 0.0, 1000.0)['value'] ?? null,
+            'chargeAmpsMax' => $this->firstNumeric($source, self::FIELD_KEYS['chargeAmpsMax'], 0.0, 1000.0)['value'] ?? null,
+            'chargeTimeRemainingMin' => $time === null ? null : (int) round($time['value']),
+            'energyRemainingKwh' => null,
+            'rangeKm' => $v['rangeKm'] ?? null,
+            'scheduledChargingActive' => null,
+            'scheduledDepartureAt' => null,
+            'distanceToHomeKm' => null,
+            'headingHome' => null,
+            'expectedHomeArrivalSocPercent' => null,
+            'vehicleStatus' => null,
+            'bidirectionalCapable' => $this->firstBoolean($source, self::FIELD_KEYS['bidirectionalCapable']),
+            'dischargeAllowed' => $this->firstBoolean($source, self::FIELD_KEYS['dischargeAllowed']),
+            'targetSocProfessionalPercent' => $this->firstNumeric($source, self::FIELD_KEYS['targetSocProfessionalPercent'], 0.0, 100.0)['value'] ?? null,
+            'departureRelevant' => $this->firstBoolean($source, self::FIELD_KEYS['departureRelevant']),
+        ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    }
+
+    private function lastSeenAt(int $source): ?int
+    {
+        $last = 0;
+        if ($source > 0) {
+            foreach (IPS_GetChildrenIDs($source) as $id) {
+                if (IPS_VariableExists($id)) {
+                    $last = max($last, $this->updatedAt($id) ?? 0);
+                }
+            }
+        }
+        // BMW CarData exposes Symcon's local receipt/update time, not the
+        // vehicle's original measurement timestamp.
+        return $last > 0 ? $last : null;
+    }
+
+    private function connectionState(int $source): ?bool
+    {
+        foreach (self::FIELD_KEYS['connected'] as $key) {
+            $id = $this->variableID($source, $key);
+            if ($id <= 0) {
+                continue;
+            }
+            $raw = GetValue($id);
+            if (is_bool($raw)) {
+                return $raw;
+            }
+            $code = strtoupper(trim((string) $raw));
+            if (in_array($code, ['CONNECTED', 'PLUGGED', 'PLUGGED_IN', 'PLUGGEDIN'], true)) {
+                return true;
+            }
+            if (in_array($code, ['DISCONNECTED', 'UNPLUGGED', 'NOT_CONNECTED', 'NOTCONNECTED'], true)) {
+                return false;
+            }
+        }
+        return null;
+    }
+
+    private function chargeState(int $source): ?string
+    {
+        foreach (self::FIELD_KEYS['charging'] as $key) {
+            $id = $this->variableID($source, $key);
+            if ($id <= 0) {
+                continue;
+            }
+            $code = strtoupper(trim((string) GetValue($id)));
+            $mapped = match ($code) {
+                'CHARGINGACTIVE', 'CHARGING' => 'charging',
+                'INITIALIZATION' => 'starting',
+                'CHARGINGPAUSED' => 'paused',
+                'WAITING_FOR_CHARGING' => 'idle',
+                'FINISHED_FULLY_CHARGED' => 'complete',
+                // A stopped or prematurely ended session does not prove
+                // that the charging target was reached.
+                'DISCONNECTED' => 'disconnected',
+                default => null,
+            };
+            if ($mapped !== null) {
+                return $mapped;
+            }
+        }
+        return null;
+    }
+
+    private function firstBoolean(int $source, array $keys): ?bool
+    {
+        foreach ($keys as $key) {
+            $id = $this->variableID($source, $key);
+            if ($id <= 0) {
+                continue;
+            }
+            $raw = GetValue($id);
+            if (is_bool($raw)) {
+                return $raw;
+            }
+            if (is_string($raw)) {
+                $state = strtolower(trim($raw));
+                if ($state === 'true') {
+                    return true;
+                }
+                if ($state === 'false') {
+                    return false;
+                }
+            }
+        }
+        return null;
     }
 
     /** Diagnostic inventory, resolved against the selected source instance. */
@@ -209,13 +384,18 @@ class NRGCarDataVehicle extends IPSModule
         $identity = $source . ':' . $vin;
         if ($this->ReadAttributeString('CachedImageIdentity') !== $identity) {
             $this->WriteAttributeString('CachedImageIdentity', $identity);
-            $this->WriteAttributeString('CachedVehicleImage', '');
             $this->WriteAttributeInteger('ImageLastAttempt', 0);
         }
-
-        $cached = $this->ReadAttributeString('CachedVehicleImage');
-        if ($cached !== '') {
-            return $cached;
+        $mediaID = $this->imageMediaID(false);
+        if ($this->ReadAttributeString('CachedMediaIdentity') === $identity && $mediaID > 0) {
+            try {
+                $encoded = IPS_GetMediaContent($mediaID);
+                if ($encoded !== '') {
+                    return 'data:image/png;base64,' . $encoded;
+                }
+            } catch (Throwable $e) {
+                // Empty media file: retry through the normal throttled path.
+            }
         }
 
         $now = time();
@@ -241,11 +421,64 @@ class NRGCarDataVehicle extends IPSModule
             if ($binary === false || substr($binary, 0, 8) !== "\x89PNG\r\n\x1a\n") {
                 return '';
             }
-            $this->WriteAttributeString('CachedVehicleImage', $image);
+            $mediaID = $this->imageMediaID(true);
+            if ($mediaID <= 0 || !IPS_SetMediaContent($mediaID, $encoded)) {
+                return '';
+            }
+            $this->WriteAttributeString('CachedMediaIdentity', $identity);
+            $this->WriteAttributeString('CachedVehicleImage', '');
             return $image;
         } catch (Throwable $e) {
             return '';
         }
+    }
+
+    /** Keep the BMW PNG in a Symcon media object, not an instance attribute. */
+    private function imageMediaID(bool $create): int
+    {
+        $id = @IPS_GetObjectIDByIdent('VehicleImage', $this->InstanceID);
+        if (is_int($id) && $id > 0 && IPS_MediaExists($id)) {
+            return $id;
+        }
+        if (!$create) {
+            return 0;
+        }
+        $id = IPS_CreateMedia(1); // MEDIATYPE_IMAGE
+        IPS_SetParent($id, $this->InstanceID);
+        IPS_SetIdent($id, 'VehicleImage');
+        IPS_SetName($id, 'Fahrzeugbild');
+        IPS_SetMediaFile($id, 'media/NRGCarDataVehicle_' . $this->InstanceID . '.png', false);
+        IPS_SetMediaCached($id, true);
+        return $id;
+    }
+
+    /** One-time upgrade of the former Base64 attribute without another BMW call. */
+    private function migrateLegacyImage(): void
+    {
+        $legacy = $this->ReadAttributeString('CachedVehicleImage');
+        if ($legacy === '') {
+            return;
+        }
+        $identity = $this->ReadAttributeString('CachedImageIdentity');
+        $source = $this->sourceInstanceID();
+        if ($source > 0 && $this->isBMWVehicle($source)) {
+            $current = $source . ':' . trim((string) IPS_GetProperty($source, 'vin'));
+            if ($identity === $current && str_starts_with($legacy, 'data:image/png;base64,')) {
+                $encoded = substr($legacy, strlen('data:image/png;base64,'));
+                $binary = base64_decode($encoded, true);
+                if ($binary !== false && substr($binary, 0, 8) === "\x89PNG\r\n\x1a\n") {
+                    try {
+                        $id = $this->imageMediaID(true);
+                        if (IPS_SetMediaContent($id, $encoded)) {
+                            $this->WriteAttributeString('CachedMediaIdentity', $current);
+                        }
+                    } catch (Throwable $e) {
+                        return; // Keep the legacy cache until migration succeeds.
+                    }
+                }
+            }
+        }
+        $this->WriteAttributeString('CachedVehicleImage', '');
     }
 
     private function sourceInstanceID(): int

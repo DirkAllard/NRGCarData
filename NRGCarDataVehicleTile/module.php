@@ -13,7 +13,6 @@ class NRGCarDataVehicleTile extends IPSModule
     // the layout or replaces one KPI with a different metric.
     private const KEY_ODOMETER = 'vehicle.vehicle.travelledDistance';
     private const KEY_LOCK = 'vehicle.cabin.door.lock.status';
-    private const KEY_PRECONDITIONING = 'vehicle.cabin.hvac.preconditioning.status.comfortState';
     private const KEY_CHARGE_POWER = 'vehicle.powertrain.electric.battery.charging.power';
     private const KEY_CHARGE_REMAINING = 'vehicle.drivetrain.electricEngine.charging.timeRemaining';
     private const KEY_PLUG = 'vehicle.body.chargingPort.status';
@@ -29,6 +28,28 @@ class NRGCarDataVehicleTile extends IPSModule
         'vehicle.chassis.axle.row1.wheel.right.tire.pressure',
         'vehicle.chassis.axle.row2.wheel.left.tire.pressure',
         'vehicle.chassis.axle.row2.wheel.right.tire.pressure',
+    ];
+    // Only the signals actually used by the tile and its status strip trigger
+    // redraws. GetVehicleData/GetTelemetry keep their complete source access.
+    private const WATCH_KEYS = [
+        'vehicle.drivetrain.batteryManagement.header',
+        'vehicle.powertrain.electric.battery.stateOfCharge.displayed',
+        'vehicle.trip.segment.end.drivetrain.batteryManagement.hvSoc',
+        'vehicle.drivetrain.electricEngine.charging.status',
+        'vehicle.drivetrain.electricEngine.charging.hvStatus',
+        'vehicle.body.chargingPort.combinedStatus',
+        'vehicle.powertrain.electric.battery.stateOfCharge.target',
+        'vehicle.drivetrain.electricEngine.kombiRemainingElectricRange',
+        'vehicle.drivetrain.lastRemainingRange',
+        'vehicle.drivetrain.electricEngine.remainingElectricRange',
+        self::KEY_ODOMETER,
+        self::KEY_LOCK,
+        self::KEY_CHARGE_POWER,
+        self::KEY_CHARGE_REMAINING,
+        self::KEY_PLUG,
+        self::KEY_TRUNK,
+        ...self::DOOR_KEYS,
+        ...self::TIRE_KEYS,
     ];
 
     public function Create()
@@ -164,7 +185,7 @@ class NRGCarDataVehicleTile extends IPSModule
             'showUpdateTime' => $this->ReadPropertyBoolean('ShowUpdateTime'),
             'kpis' => [
                 'odometerKm' => null, 'lock' => null,
-                'preconditioning' => null, 'charging' => null,
+                'chargeTimeRemainingMin' => null, 'charging' => null,
             ],
             'supplemental' => [
                 'plug' => null, 'doors' => null, 'trunk' => null,
@@ -182,6 +203,10 @@ class NRGCarDataVehicleTile extends IPSModule
         if (!is_array($state)) {
             return $default;
         }
+        // The standardized NRG contract exists independently of the tile.
+        $vehicleData = function_exists('NRGCD_GetVehicleData')
+            ? json_decode((string) @NRGCD_GetVehicleData($source), true)
+            : null;
 
         $stateSource = (int) ($state['sourceInstanceID'] ?? 0);
         $available = $stateSource > 0 && IPS_InstanceExists($stateSource);
@@ -218,7 +243,9 @@ class NRGCarDataVehicleTile extends IPSModule
         $out['kpis'] = [
             'odometerKm' => $this->numericValue($index, self::KEY_ODOMETER, 0, 1000000),
             'lock' => $this->lockValue($index),
-            'preconditioning' => $this->preconditioningValue($index),
+            'chargeTimeRemainingMin' => is_array($vehicleData)
+                ? ($vehicleData['chargeTimeRemainingMin'] ?? null)
+                : null,
             'charging' => $state['charging'] ?? null,
         ];
         $plug = strtoupper(trim((string) ($index[self::KEY_PLUG]['value'] ?? '')));
@@ -258,21 +285,6 @@ class NRGCarDataVehicleTile extends IPSModule
         return match ($code) {
             'SECURED' => 'Gesichert', 'LOCKED' => 'Verriegelt',
             'UNLOCKED' => 'Entriegelt', 'SELECTIVELOCKED' => 'Teilentriegelt',
-            default => null,
-        };
-    }
-
-    /** CarData comfortState is a read-only status, not a control command. */
-    private function preconditioningValue(array $index): ?string
-    {
-        $code = strtoupper(trim((string) ($index[self::KEY_PRECONDITIONING]['value'] ?? '')));
-        return match ($code) {
-            'NOT_ACTIVE' => 'Inaktiv',
-            'COMFORT_HEATING' => 'Heizt',
-            'COMFORT_COOLING' => 'Kühlt',
-            'COMFORT_VENTILATION' => 'Lüftet',
-            'DEFROST' => 'Enteist',
-            'COMFORT_UNDEFINED' => 'Unbestimmt',
             default => null,
         };
     }
@@ -340,9 +352,10 @@ class NRGCarDataVehicleTile extends IPSModule
             $state = json_decode((string) @NRGCD_GetVehicleState($source), true);
             $rawSource = (int) ($state['sourceInstanceID'] ?? 0);
             if ($rawSource > 0 && IPS_InstanceExists($rawSource)) {
-                foreach (IPS_GetChildrenIDs($rawSource) as $id) {
-                    if (IPS_VariableExists($id)) {
-                        $desired[] = (int) $id;
+                foreach (self::WATCH_KEYS as $key) {
+                    $id = @IPS_GetObjectIDByIdent(str_replace('.', '', $key), $rawSource);
+                    if (is_int($id) && $id > 0 && IPS_VariableExists($id)) {
+                        $desired[] = $id;
                     }
                 }
             }

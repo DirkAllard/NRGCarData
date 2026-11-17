@@ -13,6 +13,7 @@ define('KR_READY', 10103);
 $GLOBALS['ipsInstances'] = [];
 $GLOBALS['ipsVariables'] = [];
 $GLOBALS['ipsModules'] = [];
+$GLOBALS['ipsMedia'] = [];
 
 class IPSModule
 {
@@ -35,9 +36,11 @@ class IPSModule
     protected function RegisterPropertyInteger(string $name, int $default): void { $this->properties[$name] = $default; }
     protected function RegisterPropertyString(string $name, string $default): void { $this->properties[$name] = $default; }
     protected function RegisterPropertyBoolean(string $name, bool $default): void { $this->properties[$name] = $default; }
+    protected function RegisterPropertyFloat(string $name, float $default): void { $this->properties[$name] = $default; }
     protected function ReadPropertyInteger(string $name): int { return (int) $this->properties[$name]; }
     protected function ReadPropertyString(string $name): string { return (string) $this->properties[$name]; }
     protected function ReadPropertyBoolean(string $name): bool { return (bool) $this->properties[$name]; }
+    protected function ReadPropertyFloat(string $name): float { return (float) $this->properties[$name]; }
     protected function RegisterAttributeString(string $name, string $default): void { $this->attributes[$name] = $default; }
     protected function ReadAttributeString(string $name): string { return $this->attributes[$name]; }
     protected function WriteAttributeString(string $name, string $value): void { $this->attributes[$name] = $value; }
@@ -55,6 +58,7 @@ class IPSModule
     protected function UpdateVisualizationValue(string $json): void { $this->lastVisualizationMessage = $json; }
 
     public function configure(string $key, $value): void { $this->properties[$key] = $value; }
+    public function subscribedIDs(): array { return array_keys($this->messages); }
 }
 
 function IPS_InstanceExists(int $id): bool { return isset($GLOBALS['ipsInstances'][$id]); }
@@ -67,6 +71,11 @@ function IPS_GetName(int $id): string { return $GLOBALS['ipsInstances'][$id]['na
 function IPS_GetProperty(int $id, string $name) { return $GLOBALS['ipsInstances'][$id]['properties'][$name] ?? null; }
 function IPS_GetObjectIDByIdent(string $ident, int $parent)
 {
+    foreach ($GLOBALS['ipsMedia'] as $id => $m) {
+        if (($m['parent'] ?? 0) === $parent && ($m['ident'] ?? '') === $ident) {
+            return $id;
+        }
+    }
     foreach ($GLOBALS['ipsVariables'] as $id => $v) {
         if ($v['parent'] === $parent && $v['ObjectIdent'] === $ident) {
             return $id;
@@ -87,11 +96,26 @@ function IPS_GetObject(int $id): array
 }
 function GetValue(int $id) { return $GLOBALS['ipsVariables'][$id]['value']; }
 function IPS_GetKernelRunlevel(): int { return KR_READY; }
+function IPS_CreateMedia(int $type): int
+{
+    $id = 1000 + count($GLOBALS['ipsMedia']);
+    $GLOBALS['ipsMedia'][$id] = ['type' => $type, 'content' => '', 'parent' => 0, 'ident' => ''];
+    return $id;
+}
+function IPS_MediaExists(int $id): bool { return isset($GLOBALS['ipsMedia'][$id]); }
+function IPS_SetParent(int $id, int $parent): void { $GLOBALS['ipsMedia'][$id]['parent'] = $parent; }
+function IPS_SetIdent(int $id, string $ident): void { $GLOBALS['ipsMedia'][$id]['ident'] = $ident; }
+function IPS_SetName(int $id, string $name): void { $GLOBALS['ipsMedia'][$id]['name'] = $name; }
+function IPS_SetMediaFile(int $id, string $path, bool $mustExist): bool { $GLOBALS['ipsMedia'][$id]['file'] = $path; return true; }
+function IPS_SetMediaCached(int $id, bool $cached): bool { $GLOBALS['ipsMedia'][$id]['cached'] = $cached; return true; }
+function IPS_SetMediaContent(int $id, string $content): bool { $GLOBALS['ipsMedia'][$id]['content'] = $content; return true; }
+function IPS_GetMediaContent(int $id): string { return $GLOBALS['ipsMedia'][$id]['content']; }
 
 require_once __DIR__ . '/../NRGCarDataVehicle/module.php';
 require_once __DIR__ . '/../NRGCarDataVehicleTile/module.php';
 
 function NRGCD_GetVehicleState(int $id): string { return $GLOBALS['ipsModules'][$id]->GetVehicleState(); }
+function NRGCD_GetVehicleData(int $id): string { return $GLOBALS['ipsModules'][$id]->GetVehicleData(); }
 function NRGCD_GetTelemetry(int $id): string { return $GLOBALS['ipsModules'][$id]->GetTelemetry(); }
 function NRGCD_GetVehicleImage(int $id): string { return $GLOBALS['ipsModules'][$id]->GetVehicleImage(); }
 function BMW_getImage(int $id): string
@@ -165,12 +189,40 @@ try {
     testAssert($state['chargeLimit'] === 80.0 && $state['rangeKm'] === 293.0, 'Limit and range');
     testAssert($state['connected'] === null && $state['batteryCapacityKwh'] === null, 'Unknown stays unknown');
 
+    $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($data['contractType'] === 'vehicle' && $data['contractVersion'] === '1.0', 'NRG contract version');
+    testAssert($data['provider'] === 'BMW CarData' && $data['instanceID'] === 200, 'NRG provider and identity');
+    testAssert($data['connected'] === true && $data['charging'] === true, 'NRG plug and charge states are independent');
+    testAssert($data['soc'] === 52.0 && $data['chargeLimit'] === 80, 'NRG SoC and integer charge target');
+    testAssert($data['chargeState'] === 'charging' && $data['chargePowerW'] === 6400.0, 'NRG charging details');
+    testAssert($data['chargeTimeRemainingMin'] === 28, 'NRG charging target time in minutes');
+    testAssert($data['chargeAmpsRequest'] === 32.0, 'NRG charge amperes read independently of the tile');
+    testAssert($data['batteryCapacityKwh'] === null && $data['atHome'] === null, 'Missing contract fields are null');
+    testAssert($data['lastSeenAt'] === 1700000900, 'NRG lastSeenAt from all available BMW variables');
+    $contractKeys = [
+        'contractType', 'contractVersion', 'instanceID', 'name', 'provider',
+        'soc', 'connected', 'charging', 'chargeLimit', 'atHome', 'batteryCapacityKwh',
+        'lastSeenAt', 'socID', 'chargingID', 'vin', 'manufacturer', 'powertrain',
+        'chargeState', 'chargePowerW', 'chargeAmpsRequest', 'chargeAmpsMax',
+        'chargeTimeRemainingMin', 'energyRemainingKwh', 'rangeKm',
+        'scheduledChargingActive', 'scheduledDepartureAt', 'distanceToHomeKm',
+        'headingHome', 'expectedHomeArrivalSocPercent', 'vehicleStatus',
+        'bidirectionalCapable', 'dischargeAllowed', 'targetSocProfessionalPercent',
+        'departureRelevant',
+    ];
+    testAssert(array_keys($data) === $contractKeys, 'Every NRG contract key must exist');
+    $vehicle->configure('BatteryCapacityKwh', 71.5);
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['batteryCapacityKwh'] === 71.5, 'Manual usable capacity');
+
     $telemetry = json_decode($vehicle->GetTelemetry(), true, 512, JSON_THROW_ON_ERROR);
     testAssert($telemetry['count'] === 20, 'Complete source variable inventory');
     testAssert(str_starts_with($vehicle->GetVehicleImage(), 'data:image/png;base64,'), 'Real BMW-image function wired to adapter');
     $firstImage = $vehicle->GetVehicleImage();
     testAssert($vehicle->GetVehicleImage() === $firstImage, 'Image cached as data URI');
     testAssert(($GLOBALS['imageCalls'][100] ?? 0) === 1, 'Cached image avoids additional BMW API calls');
+    $imageMediaID = IPS_GetObjectIDByIdent('VehicleImage', 200);
+    testAssert(IPS_MediaExists($imageMediaID), 'Image stored as child media object');
+    testAssert($GLOBALS['ipsMedia'][$imageMediaID]['content'] !== '', 'PNG payload stored in media');
 
     $GLOBALS['ipsInstances'][400] = [
         'ModuleInfo' => ['ModuleID' => '{9E4E3D3F-4414-4682-BFA9-781ACC4FB099}'],
@@ -183,7 +235,7 @@ try {
     testAssert($tileState['soc'] === 52.0 && $tileState['available'] === true, 'Tile contract');
     testAssert($tileState['kpis']['odometerKm'] === 20458.0, 'Stable odometer slot');
     testAssert($tileState['kpis']['lock'] === 'Gesichert', 'Stable lock slot');
-    testAssert($tileState['kpis']['preconditioning'] === 'Heizt', 'Preconditioning from exact CarData status');
+    testAssert($tileState['kpis']['chargeTimeRemainingMin'] === 28, 'Remaining charge time replaces preconditioning KPI');
     testAssert(!array_key_exists('acLimitA', $tileState['kpis']), 'AC limit removed from fixed KPI layout');
     testAssert($tileState['supplemental']['plug'] === 'Verbunden', 'Charging port descriptor');
     testAssert($tileState['supplemental']['doors'] === 'Alle geschlossen', 'All doors known closed');
@@ -198,33 +250,45 @@ try {
     testAssert(!str_contains($tile->lastVisualizationMessage, 'data:image/png;base64,') || str_contains($tile->lastVisualizationMessage, 'image'), 'Image only sent with data contract');
     testAssert(str_contains($tile->GetVisualizationTile(), 'handleMessage('), 'HTML SDK initializer');
     testAssert(!str_contains($tile->GetVisualizationTile(), 'id="sheet"'), 'No detail overlay');
-    testAssert(str_contains($tile->GetVisualizationTile(), 'id="preconditioning"'), 'Preconditioning has a fixed visual KPI slot');
+    testAssert(str_contains($tile->GetVisualizationTile(), 'id="charge-remaining"'), 'Charging time has a fixed visual KPI slot');
+    testAssert(!str_contains($tile->GetVisualizationTile(), 'Vorklimatisierung'), 'Preconditioning removed from tile');
+    testAssert(count($tile->subscribedIDs()) < count(IPS_GetChildrenIDs(100)), 'Tile subscribes only to displayed signals');
+    testAssert(!in_array(321, $tile->subscribedIDs(), true), 'Unrelated preconditioning signal not subscribed');
+    $watchedBefore = $tile->subscribedIDs();
+    addValue(330, 100, 'vehicle.test.unusedTelemetry', 123);
+    $GLOBALS['ipsVariables'][330]['variable']['VariableUpdated'] = 1700001234;
+    $tile->Refresh();
+    testAssert($tile->subscribedIDs() === $watchedBefore, 'Unrelated new telemetry does not add a tile subscription');
+    $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($data['lastSeenAt'] === 1700001234, 'NRG receipt time follows full telemetry, not tile subscriptions');
+    testAssert(json_decode($vehicle->GetTelemetry(), true)['count'] === 21, 'Full telemetry includes unobserved fields');
+    addValue(331, 100, 'vehicle.powertrain.electric.battery.charging.acLimit.max', 32);
+    addValue(332, 100, 'vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.dischargeAllowed', true);
+    addValue(333, 100, 'vehicle.powertrain.electric.battery.stateOfCharge.targetSoCForProfessionalMode', 25);
+    addValue(334, 100, 'vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.departureTimeRelevant', false);
+    $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($data['chargeAmpsMax'] === 32.0, 'NRG charge-current limit from additional BMW field');
+    testAssert($data['dischargeAllowed'] === true && $data['departureRelevant'] === false, 'NRG V2H Boolean fields retain true/false');
+    testAssert($data['targetSocProfessionalPercent'] === 25.0, 'NRG professional target SoC');
     testAssert(!str_contains($tile->GetVisualizationTile(), 'id="ac-limit"'), 'Old AC limit KPI removed');
     testAssert(strpos($tile->GetVisualizationTile(), 'handleMessage(') < strpos($tile->GetVisualizationTile(), '</body>'), 'Initializer inside HTML body');
 
-    foreach ([
-        'NOT_ACTIVE' => 'Inaktiv',
-        'COMFORT_COOLING' => 'Kühlt',
-        'COMFORT_VENTILATION' => 'Lüftet',
-        'DEFROST' => 'Enteist',
-        'COMFORT_UNDEFINED' => 'Unbestimmt',
-    ] as $rawStatus => $displayStatus) {
-        $GLOBALS['ipsVariables'][321]['value'] = $rawStatus;
-        $display = json_decode($tile->GetDisplayData(), true, 512, JSON_THROW_ON_ERROR);
-        testAssert($display['kpis']['preconditioning'] === $displayStatus, 'Preconditioning status ' . $rawStatus);
-    }
-    $GLOBALS['ipsVariables'][321]['value'] = 'UNEXPECTED_STATUS';
+    $GLOBALS['ipsVariables'][320]['value'] = 91;
     $display = json_decode($tile->GetDisplayData(), true, 512, JSON_THROW_ON_ERROR);
-    testAssert($display['kpis']['preconditioning'] === null, 'Unrecognized preconditioning stays unknown');
-    $GLOBALS['ipsVariables'][321]['value'] = 'COMFORT_HEATING';
+    testAssert($display['kpis']['chargeTimeRemainingMin'] === 91, 'Charging time updated independently of fixed KPI layout');
+    $GLOBALS['ipsVariables'][320]['value'] = 28;
 
     $GLOBALS['ipsVariables'][302]['value'] = 'CHARGINGPAUSED';
     $state = json_decode($vehicle->GetVehicleState(), true, 512, JSON_THROW_ON_ERROR);
     testAssert($state['charging'] === false, 'Paused is not charging');
+    $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($data['chargeState'] === 'paused' && $data['chargePowerW'] === 0.0 && $data['chargeTimeRemainingMin'] === null, 'Paused charging clears power and time');
 
     $GLOBALS['ipsVariables'][302]['value'] = 'NEW_UNKNOWN_STATE';
     $state = json_decode($vehicle->GetVehicleState(), true, 512, JSON_THROW_ON_ERROR);
     testAssert($state['charging'] === null && $state['chargingID'] === 302, 'Unknown enum remains null');
+    $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($data['chargeState'] === null, 'Unknown charge status remains null in NRG contract');
 
     $GLOBALS['ipsVariables'][301]['value'] = 150;
     addValue(305, 100, 'vehicle.powertrain.electric.battery.stateOfCharge.displayed', '53');
@@ -249,8 +313,11 @@ try {
     $GLOBALS['ipsModules'][201] = $mini;
     $miniState = json_decode($mini->GetVehicleState(), true, 512, JSON_THROW_ON_ERROR);
     testAssert($miniState['soc'] === 68.0 && $miniState['vin'] === 'MINITESTVIN', 'Independent MINI');
+    $miniData = json_decode($mini->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
+    testAssert($miniData['connected'] === null && $miniData['chargeTimeRemainingMin'] === null, 'MINI does not inherit BMW cable or charge duration');
     testAssert(json_decode($vehicle->GetVehicleState(), true)['soc'] === 53.0, 'BMW unchanged by MINI');
     testAssert($mini->GetVehicleImage() !== $vehicle->GetVehicleImage(), 'Separate BMW image cache for separate vehicles');
+    testAssert(IPS_GetObjectIDByIdent('VehicleImage', 200) !== IPS_GetObjectIDByIdent('VehicleImage', 201), 'Independent media objects for BMW and MINI');
 
     $ambiguous = new NRGCarDataVehicleTile(500);
     $ambiguous->ApplyChanges();
