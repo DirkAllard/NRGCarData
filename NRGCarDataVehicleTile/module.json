@@ -1,0 +1,20 @@
+{
+    "id":  "{9E4E3D3F-4414-4682-BFA9-781ACC4FB099}",
+    "name":  "NRGCarDataVehicleTile",
+    "type":  3,
+    "vendor":  "BMW Group",
+    "aliases":  [
+                    "NRG-Stack CarData Fahrzeugkachel"
+                ],
+    "parentRequirements":  [
+
+                           ],
+    "childRequirements":  [
+
+                          ],
+    "implemented":  [
+
+                    ],
+    "prefix":  "NRGCDT",
+    "url":  "http://192.168.5.115:3080/dirk/NRGCarData"
+}

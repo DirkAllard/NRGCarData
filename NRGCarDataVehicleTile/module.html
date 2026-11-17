@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:light dark;--ink:#192a3e;--muted:#586b81;--blue:#1768c3;--edge:#d9e3ee;--tint:#f0f5fb;--soft:#f7f9fc;--bg:#fff;--green:#158c70}
+@media(prefers-color-scheme:dark){:root{--ink:#f0f6fd;--muted:#a5b7cb;--blue:#76baff;--edge:#304558;--tint:#243646;--soft:#202e3c;--bg:#162330;--green:#46cda9}}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%}body{font:13px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--ink)}
+.tile{width:100%;height:100%;min-height:330px;padding:48px 13px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:9px;background:var(--bg);overflow:auto}
+.hero{display:grid;grid-template-columns:205px minmax(0,1fr);gap:14px;min-height:0;align-items:stretch}
+.vehicle-photo{width:205px;min-height:157px;height:169px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(130deg,transparent 40%,var(--tint));border-radius:13px}
+.vehicle-photo img{width:345px;height:139px;max-width:none;flex:0 0 345px;object-fit:contain}.vehicle-photo img[hidden],.fallback[hidden]{display:none}.fallback{font-size:32px;font-weight:800;letter-spacing:-.08em;opacity:.2}
+.energy{min-width:0;display:flex;flex-direction:column;justify-content:center;padding:7px 9px 6px 0}
+.energy-head{display:flex;justify-content:space-between;align-items:center;gap:7px}.eyebrow{font-size:11px;font-weight:770;letter-spacing:1.1px;color:var(--muted)}
+.soc{font-size:49px;font-weight:800;letter-spacing:-2px;line-height:1.03;margin:7px 0 8px;font-variant-numeric:tabular-nums}.soc small{font-size:.48em;letter-spacing:0}
+.progress{position:relative;height:9px;background:var(--edge);border-radius:30px;margin-bottom:13px}.progress-fill{width:0;height:100%;background:linear-gradient(90deg,#115fbb,#62b0f5);border-radius:30px;transition:width .25s}.progress-target{position:absolute;width:2px;height:15px;top:-3px;left:80%;background:var(--ink);border-radius:2px}.progress-target[hidden]{display:none}
+.energy-bottom{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.energy-bottom .big{font-size:24px;line-height:1.06;font-weight:770;font-variant-numeric:tabular-nums}.energy-bottom .big small{font-size:12px;color:var(--muted);font-weight:650;margin-left:3px}.energy-bottom .description{font-size:11px;color:var(--muted);margin-top:4px}.energy-bottom .target{text-align:right;white-space:nowrap}.energy-bottom .target .big{font-size:19px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.kpi{min-width:0;border-radius:12px;background:var(--tint);padding:10px 12px;min-height:78px}.kpi-value{font-size:18px;font-weight:770;font-variant-numeric:tabular-nums;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.kpi-value small{font-size:12px;font-weight:600;color:var(--muted);margin-left:3px}.kpi-title{margin-top:4px;font-size:11px;font-weight:670;color:var(--muted);white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.kpi-value.compact{font-size:15px}.kpi-meta{font-size:10px;min-height:13px;color:var(--muted);font-weight:660;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.charging-now .kpi-value{color:var(--green)}
+.supplemental{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.mini{min-width:0;min-height:49px;border-top:2px solid var(--edge);padding:6px 3px 2px}.mini-title{font-size:11px;font-weight:690;color:var(--muted);margin-bottom:4px}.mini-value{font-size:13px;font-weight:740;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tires{display:grid;grid-template-columns:1fr 1fr;gap:1px 8px;font-size:11px;font-weight:690;line-height:1.2}.tire{white-space:nowrap}.tire span{color:var(--muted);font-size:10px;margin-right:4px}
+.footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--edge);padding-top:9px;color:var(--muted);font-size:11px}.fresh{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fresh.soc-fresh{text-align:right}
+@media(max-width:560px){.hero{grid-template-columns:170px minmax(0,1fr);gap:9px}.vehicle-photo{width:170px;height:151px;min-height:0}.soc{font-size:39px}.energy-bottom .big{font-size:21px}.kpis{gap:5px}.kpi{padding:8px 9px}.kpi-value{font-size:16px}.kpi-title{font-size:10px}.supplemental{gap:6px}.tile{padding-left:10px;padding-right:10px}}
+@media(max-width:390px){.tile{padding-top:44px;overflow:auto}.hero{grid-template-columns:130px minmax(0,1fr)}.vehicle-photo{width:130px;height:120px}.vehicle-photo img{width:295px;height:119px;flex-basis:295px}.energy{padding:2px 0}.soc{font-size:32px;margin:4px 0}.progress{margin-bottom:8px}.energy-bottom .big{font-size:17px}.energy-bottom .target .big{font-size:15px}.eyebrow{font-size:9px}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.supplemental{grid-template-columns:1fr}.mini{min-height:34px}.footer{flex-direction:column;align-items:flex-start;gap:3px}}
+</style>
+</head>
+<body>
+<main class="tile">
+ <section class="hero">
+   <div class="vehicle-photo"><img id="vehicle-image" alt="BMW-Fahrzeugbild aus CarData" hidden><span class="fallback" id="fallback">BMW</span></div>
+   <div class="energy">
+     <div class="energy-head"><span class="eyebrow">LADESTAND</span></div>
+     <div class="soc"><span id="soc">–</span><small>%</small></div>
+     <div class="progress" role="img" aria-label="Batterieladestand und Ladelimit"><div class="progress-fill" id="progress-fill"></div><div class="progress-target" id="progress-target" hidden></div></div>
+     <div class="energy-bottom"><div><div class="big"><span id="range">–</span><small>km</small></div><div class="description">Elektrische Reichweite</div></div><div class="target"><div class="big"><span id="limit">–</span><small>%</small></div><div class="description">Ladeziel</div></div></div>
+   </div>
+ </section>
+ <section class="kpis" aria-label="Feste Fahrzeugkennzahlen">
+   <div class="kpi"><div class="kpi-value"><span id="odometer">–</span><small>km</small></div><div class="kpi-title">Kilometerstand</div></div>
+   <div class="kpi"><div class="kpi-value compact" id="lock">–</div><div class="kpi-title">Verriegelung</div></div>
+   <div class="kpi"><div class="kpi-value compact" id="preconditioning">–</div><div class="kpi-title">Vorklimatisierung</div></div>
+   <div class="kpi" id="charging-card"><div class="kpi-value compact" id="charging">–</div><div class="kpi-title">Ladevorgang</div><div class="kpi-meta" id="charging-meta"></div></div>
+ </section>
+ <section class="supplemental" aria-label="Weitere CarData-Fahrzeugzustände">
+   <div class="mini"><div class="mini-title">Ladeanschluss</div><div class="mini-value" id="plug">–</div></div>
+   <div class="mini"><div class="mini-title">Türen / Heckklappe</div><div class="mini-value" id="doors">–</div></div>
+   <div class="mini"><div class="mini-title">Reifendruck (bar)</div><div class="tires" id="tires"><div class="mini-value">–</div></div></div>
+ </section>
+ <footer class="footer" id="footer"><span class="fresh" id="last-receipt"></span><span class="fresh soc-fresh" id="soc-receipt"></span></footer>
+</main>
+<script>
+'use strict';
+const byId=id=>document.getElementById(id);
+function numeric(value,decimals=0){return value===null||value===undefined||value===''||!Number.isFinite(Number(value))?'–':new Intl.NumberFormat('de-DE',{maximumFractionDigits:decimals}).format(Number(value))}
+function age(ts){if(!Number.isFinite(ts)||ts<=0)return '–';const delta=Math.max(0,Math.floor(Date.now()/1000-ts));if(delta<60)return 'gerade eben';if(delta<3600)return 'vor '+Math.floor(delta/60)+' Min.';if(delta<86400)return 'vor '+Math.floor(delta/3600)+' Std. '+Math.floor((delta%3600)/60)+' Min.';return 'vor '+Math.floor(delta/86400)+' Tagen'}
+function formatTime(ts){return ts>0&&Number.isFinite(ts)?new Date(ts*1000).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'–'}
+function renderTires(values){const root=byId('tires');root.replaceChildren();const v=Array.isArray(values)?values:[];if(!v.some(x=>x!==null&&x!==undefined)){const empty=document.createElement('div');empty.className='mini-value';empty.textContent='–';root.append(empty);return}const labels=['VL','VR','HL','HR'];for(let i=0;i<4;i++){const cell=document.createElement('div');cell.className='tire';const lab=document.createElement('span');lab.textContent=labels[i];cell.append(lab,document.createTextNode(numeric(v[i],1)));root.append(cell)}}
+function handleMessage(message){let d=message;if(typeof d==='string'){try{d=JSON.parse(d)}catch{return}}if(!d||typeof d!=='object')return;
+ if(Object.prototype.hasOwnProperty.call(d,'image')){const img=byId('vehicle-image'),valid=typeof d.image==='string'&&d.image.startsWith('data:image/png;base64,');img.hidden=!valid;byId('fallback').hidden=valid;if(valid&&img.src!==d.image)img.src=d.image;if(!valid)img.removeAttribute('src')}
+ byId('soc').textContent=numeric(d.soc);byId('range').textContent=numeric(d.rangeKm);byId('limit').textContent=numeric(d.chargeLimit);const soc=Number(d.soc),limit=Number(d.chargeLimit);byId('progress-fill').style.width=d.soc!==null&&d.soc!==undefined&&Number.isFinite(soc)?Math.max(0,Math.min(100,soc))+'%':'0%';const marker=byId('progress-target');marker.hidden=d.chargeLimit===null||d.chargeLimit===undefined||!Number.isFinite(limit);if(!marker.hidden)marker.style.left=Math.max(0,Math.min(100,limit))+'%';
+ const charging=d.charging===true;const k=d.kpis||{};byId('odometer').textContent=numeric(k.odometerKm);byId('lock').textContent=k.lock||'–';byId('preconditioning').textContent=k.preconditioning||'–';byId('charging').textContent=charging?'Lädt':d.charging===false?'Inaktiv':'–';byId('charging-card').classList.toggle('charging-now',charging);
+ const s=d.supplemental||{};const chargeDetails=[];if(charging&&s.chargingPowerKw!==null&&s.chargingPowerKw!==undefined)chargeDetails.push(numeric(s.chargingPowerKw,1)+' kW');if(charging&&s.chargingRemainingMin!==null&&s.chargingRemainingMin!==undefined)chargeDetails.push(numeric(s.chargingRemainingMin)+' min');byId('charging-meta').textContent=chargeDetails.join(' · ');byId('plug').textContent=s.plug||'–';const states=[];if(s.doors)states.push(s.doors==='Alle geschlossen'?'Türen zu':s.doors);if(s.trunk)states.push(s.trunk==='Geschlossen'?'Heck zu':'Heck offen');byId('doors').textContent=states.length?states.join(' · '):'–';renderTires(s.tiresBar);
+ const footer=byId('footer');footer.hidden=d.showUpdateTime===false;const last=Number(d.lastReceiptAt),socTs=Number(d.socReceivedAt);byId('last-receipt').textContent='Letzter Symcon-Empfang: '+formatTime(last);byId('soc-receipt').textContent='Ladestand empfangen: '+age(socTs);
+}
+</script>
+</body>
+</html>

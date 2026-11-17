@@ -1,0 +1,20 @@
+{
+    "id":  "{48F2EE15-0D72-40E4-8E94-612A178D554E}",
+    "name":  "NRGCarDataVehicle",
+    "type":  3,
+    "vendor":  "BMW Group",
+    "aliases":  [
+                    "NRG-Stack CarData Fahrzeugadapter"
+                ],
+    "parentRequirements":  [
+
+                           ],
+    "childRequirements":  [
+
+                          ],
+    "implemented":  [
+
+                    ],
+    "prefix":  "NRGCD",
+    "url":  "http://192.168.5.115:3080/dirk/NRGCarData"
+}
