@@ -1,8 +1,8 @@
 {
   "id": "{9E042E51-D99A-4395-BC3A-7B0EDF19EB77}",
   "author": "Dirk Allard",
-  "name": "NRG Stack CarData",
-  "url": "http://192.168.5.115:3080/dirk/NRGCarData",
+  "name": "NRG-Stack CarData",
+  "url": "https://github.com/DirkAllard/NRGCarData",
   "compatibility": {
     "version": "9.0"
   },
