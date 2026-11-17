@@ -191,13 +191,13 @@ try {
 
     $data = json_decode($vehicle->GetVehicleData(), true, 512, JSON_THROW_ON_ERROR);
     testAssert($data['contractType'] === 'vehicle' && $data['contractVersion'] === '1.0', 'NRG contract version');
-    testAssert($data['provider'] === 'BMW CarData' && $data['instanceID'] === 200, 'NRG provider and identity');
+    testAssert($data['provider'] === 'NRGCD' && $data['manufacturer'] === 'BMW' && $data['instanceID'] === 200, 'NRG provider and manufacturer');
     testAssert($data['connected'] === true && $data['charging'] === true, 'NRG plug and charge states are independent');
     testAssert($data['soc'] === 52.0 && $data['chargeLimit'] === 80, 'NRG SoC and integer charge target');
     testAssert($data['chargeState'] === 'charging' && $data['chargePowerW'] === 6400.0, 'NRG charging details');
     testAssert($data['chargeTimeRemainingMin'] === 28, 'NRG charging target time in minutes');
     testAssert($data['chargeAmpsRequest'] === 32.0, 'NRG charge amperes read independently of the tile');
-    testAssert($data['batteryCapacityKwh'] === null && $data['atHome'] === null, 'Missing contract fields are null');
+    testAssert($data['batteryCapacityKwh'] === null && $data['atHome'] === false, 'Unknown capacity is null; unknown location means not at home');
     testAssert($data['lastSeenAt'] === 1700000900, 'NRG lastSeenAt from all available BMW variables');
     $contractKeys = [
         'contractType', 'contractVersion', 'instanceID', 'name', 'provider',
@@ -296,6 +296,31 @@ try {
     testAssert($state['soc'] === 53.0 && $state['socID'] === 305, 'Invalid header falls back');
     $tileAfterNewField = json_decode($tile->GetDisplayData(), true, 512, JSON_THROW_ON_ERROR);
     testAssert(array_keys($tileAfterNewField['kpis']) === array_keys($tileState['kpis']), 'New telemetry cannot reprioritize KPI slots');
+
+    // GPS geofence works separately from the tile and every other signal.
+    $vehicle->configure('UseHomeLocation', true);
+    $vehicle->configure('HomeLatitude', 50.0000);
+    $vehicle->configure('HomeLongitude', 8.0000);
+    $vehicle->configure('HomeRadiusMeters', 250);
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Missing GPS pair => false');
+    addValue(340, 100, 'vehicle.cabin.infotainment.navigation.currentLocation.latitude', 50.0005);
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Partial GPS pair => false');
+    addValue(341, 100, 'vehicle.cabin.infotainment.navigation.currentLocation.longitude', 8.0005);
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === true, 'Inside geofence => true');
+    testAssert(json_decode($vehicle->GetVehicleState(), true)['atHome'] === true, 'Contracts use same location');
+    $GLOBALS['ipsVariables'][340]['value'] = 50.0100;
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Outside geofence => false');
+    $GLOBALS['ipsVariables'][340]['value'] = 'invalid';
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Invalid GPS => false');
+    $GLOBALS['ipsVariables'][340]['value'] = 0.0;
+    $GLOBALS['ipsVariables'][341]['value'] = 0.0;
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Uninitialised 0/0 => false');
+    $GLOBALS['ipsVariables'][340]['value'] = 50.0005;
+    $GLOBALS['ipsVariables'][341]['value'] = 8.0005;
+    $vehicle->configure('UseHomeLocation', false);
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Disabled geofence => false');
+    $vehicle->configure('UseHomeLocation', true);
+    testAssert(str_contains($vehicle->GetConfigurationForm(), '"digits":4'), 'Four decimal input for coordinates');
 
     // Second vehicle on the same BMW transport must not leak values or VIN.
     $GLOBALS['ipsInstances'][101] = [

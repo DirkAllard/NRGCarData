@@ -10,7 +10,7 @@ die auf die zugehörige BMW-CarData-Fahrzeuginstanz verweist.
 Der Adapter stellt `NRGCD_GetVehicleData($id)` als **lesenden, herstellerneutralen
 NRG-Stack-Fahrzeugvertrag v1.0** bereit. Alle im Vertrag definierten Schlüssel
 werden unabhängig von der Kachel geliefert; nicht verfügbare Messwerte bleiben
-`null`. Die ältere Funktion `NRGCD_GetVehicleState($id)` (v1.6) bleibt aus
+`null` (Ausnahme: Bei unbekannter Position ist `atHome` ausdrücklich `false`). Die ältere Funktion `NRGCD_GetVehicleState($id)` (v1.6) bleibt aus
 Kompatibilitätsgründen unverändert verfügbar. Die Quellvariablen werden über den technischen BMW-Schlüssel
 gefunden (Ident = Schlüssel ohne Punkte). Für nicht
 gelieferte Felder stehen `null` bzw. `0` bei Variablen-IDs.
@@ -28,14 +28,25 @@ gelieferte Felder stehen `null` bzw. `0` bei Variablen-IDs.
 | `chargeAmpsRequest` / `chargeAmpsMax` | `vehicle.powertrain.electric.battery.charging.acLimit.selected` / `.max` (A) |
 | `batteryCapacityKwh` | Manuell konfigurierbare nutzbare Netto-Kapazität in kWh (0 in der Konfiguration = unbekannt) |
 | `lastSeenAt` | Größter `VariableUpdated`-Zeitstempel aller tatsächlich angelegten BMW-Quellvariablen (Unix-Sekunden) |
+| `provider` / `manufacturer` | Feste Werte `NRGCD` / `BMW` |
+| `atHome` | BMW-CarData-GPS-Felder `vehicle.cabin.infotainment.navigation.currentLocation.latitude` und `.longitude`; berechneter Abstand zum konfigurierten Heimstandort |
 | `bidirectionalCapable`, `dischargeAllowed`, `targetSocProfessionalPercent`, `departureRelevant` | Entsprechende BMW-CarData-Felder, sofern eindeutig als Boolean bzw. Prozentwert geliefert |
 
-Die übrigen NRG-Felder (`atHome`, `energyRemainingKwh`, geplante Abfahrt,
-Navigation/Heimweg und Fahrzeugstatus) sind Bestandteil des JSON-Vertrags,
-bleiben ohne belastbare BMW-Datenquelle jedoch `null`. Eine 0 wird nicht als
-Ersatz für unbekannte Messwerte verwendet. `manufacturer` und `powertrain`
-bleiben ebenfalls `null`, solange die Fahrzeugvariante nicht zuverlässig
-ermittelt werden kann (das BMW-CarData-Modul unterstützt auch MINI).
+Die übrigen NRG-Felder (`energyRemainingKwh`, geplante Abfahrt,
+Navigation/Heimweg und Fahrzeugstatus) bleiben ohne belastbare BMW-Datenquelle
+`null`. Eine 0 wird nicht als Ersatz für unbekannte Messwerte verwendet.
+`manufacturer` ist entsprechend der NRG-Vorgabe fest `BMW`, auch wenn das
+Quellmodul technisch MINI-Fahrzeuge unterstützt; `powertrain` bleibt unbekannt.
+
+**Heimposition im Fahrzeugadapter:** Optional aktivierbar; geografische Breite
+und Länge werden mit jeweils vier Nachkommastellen eingegeben. Der Heimradius
+ist konfigurierbar (250 m als Standard, erlaubt sind 25 bis 5000 m). Die
+Berechnung verwendet die Haversine-Formel. Ohne aktivierte Heimposition oder
+bei fehlendem, unvollständigem oder ungültigem Fahrzeug-GPS-Paar, ebenso bei
+0/0, ist `atHome` **`false`**. Sonst gilt `true`, wenn die letzte bekannte
+Fahrzeugposition höchstens den Heimradius von den Heimkoordinaten entfernt ist.
+BMW-GPS-Messwerte können älter sein als der letzte Fahrzeugstatus; die
+GPS-Schlüssel müssen im BMW-CarData-Stream aktiviert sein.
 
 Die Statuswerte für den Ladevorgang orientieren sich an der überprüften
 [evcc-BMW-CarData-Implementierung](https://github.com/evcc-io/evcc/blob/master/vehicle/bmw/cardata/provider.go).

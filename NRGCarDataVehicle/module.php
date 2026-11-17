@@ -44,6 +44,8 @@ class NRGCarDataVehicle extends IPSModule
         'dischargeAllowed' => ['vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.dischargeAllowed'],
         'targetSocProfessionalPercent' => ['vehicle.powertrain.electric.battery.stateOfCharge.targetSoCForProfessionalMode'],
         'departureRelevant' => ['vehicle.drivetrain.electricEngine.charging.profile.settings.biDirectionalCharging.departureTimeRelevant'],
+        'latitude' => ['vehicle.cabin.infotainment.navigation.currentLocation.latitude'],
+        'longitude' => ['vehicle.cabin.infotainment.navigation.currentLocation.longitude'],
     ];
 
     public function Create()
@@ -51,6 +53,10 @@ class NRGCarDataVehicle extends IPSModule
         parent::Create();
         $this->RegisterPropertyInteger('SourceInstanceID', 0);
         $this->RegisterPropertyFloat('BatteryCapacityKwh', 0.0);
+        $this->RegisterPropertyBoolean('UseHomeLocation', false);
+        $this->RegisterPropertyFloat('HomeLatitude', 0.0);
+        $this->RegisterPropertyFloat('HomeLongitude', 0.0);
+        $this->RegisterPropertyInteger('HomeRadiusMeters', 250);
         // Legacy image attribute is kept only to clear or migrate existing data.
         $this->RegisterAttributeString('CachedVehicleImage', '');
         $this->RegisterAttributeString('CachedImageIdentity', '');
@@ -98,6 +104,25 @@ class NRGCarDataVehicle extends IPSModule
                     'caption' => 'Nutzbare Batteriekapazität (kWh; 0 = unbekannt)',
                     'minimum' => 0, 'digits' => 1, 'suffix' => 'kWh',
                 ],
+                [
+                    'type' => 'CheckBox', 'name' => 'UseHomeLocation',
+                    'caption' => 'Heimposition zur Anwesenheitserkennung verwenden',
+                ],
+                [
+                    'type' => 'NumberSpinner', 'name' => 'HomeLatitude',
+                    'caption' => 'Heimposition: Breitengrad (N/S)',
+                    'minimum' => -90, 'maximum' => 90, 'digits' => 4, 'suffix' => '°',
+                ],
+                [
+                    'type' => 'NumberSpinner', 'name' => 'HomeLongitude',
+                    'caption' => 'Heimposition: Längengrad (O/W)',
+                    'minimum' => -180, 'maximum' => 180, 'digits' => 4, 'suffix' => '°',
+                ],
+                [
+                    'type' => 'NumberSpinner', 'name' => 'HomeRadiusMeters',
+                    'caption' => 'Heimradius',
+                    'minimum' => 25, 'maximum' => 5000, 'suffix' => 'm',
+                ],
             ],
         ], JSON_UNESCAPED_UNICODE);
     }
@@ -135,7 +160,7 @@ class NRGCarDataVehicle extends IPSModule
             'chargeLimit' => $limitField['value'] ?? null,
             'chargeAmpsRequest' => null,
             'chargeAmpsMax' => null,
-            'atHome' => null,
+            'atHome' => $this->isAtHome($source),
             'scheduledChargingActive' => null,
             'scheduledDeparture' => null,
             'energyRemainingKwh' => null,
@@ -184,20 +209,20 @@ class NRGCarDataVehicle extends IPSModule
             'contractVersion' => '1.0',
             'instanceID' => $this->InstanceID,
             'name' => IPS_GetName($this->InstanceID),
-            'provider' => 'BMW CarData',
+            'provider' => 'NRGCD',
             // Required: never use 0 as a substitute for missing measurements.
             'soc' => $v['soc'] ?? null,
             'connected' => $connected,
             'charging' => $charging,
             'chargeLimit' => $limit === null ? null : (int) round((float) $limit),
-            'atHome' => null,
+            'atHome' => (bool) ($v['atHome'] ?? false),
             'batteryCapacityKwh' => $capacity,
             'lastSeenAt' => $this->lastSeenAt($source),
             'socID' => (int) ($v['socID'] ?? 0),
             'chargingID' => (int) ($v['chargingID'] ?? 0),
             // Optional fields from the same contract, including V2H fields.
             'vin' => $v['vin'] ?? '',
-            'manufacturer' => null,
+            'manufacturer' => 'BMW',
             'powertrain' => null,
             'chargeState' => $state,
             'chargePowerW' => $charging === false ? 0.0 : ($power['value'] ?? null),
@@ -217,6 +242,40 @@ class NRGCarDataVehicle extends IPSModule
             'targetSocProfessionalPercent' => $this->firstNumeric($source, self::FIELD_KEYS['targetSocProfessionalPercent'], 0.0, 100.0)['value'] ?? null,
             'departureRelevant' => $this->firstBoolean($source, self::FIELD_KEYS['departureRelevant']),
         ], JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+    }
+
+
+    /**
+     * Calculate the home geofence from BMW CarData GPS variables.
+     * Incomplete, invalid and unavailable positions explicitly return false.
+     */
+    private function isAtHome(int $source): bool
+    {
+        if ($source <= 0 || !$this->ReadPropertyBoolean('UseHomeLocation')) {
+            return false;
+        }
+        $latitude = $this->firstNumeric($source, self::FIELD_KEYS['latitude'], -90.0, 90.0)['value'] ?? null;
+        $longitude = $this->firstNumeric($source, self::FIELD_KEYS['longitude'], -180.0, 180.0)['value'] ?? null;
+        if ($latitude === null || $longitude === null ||
+            ($latitude == 0.0 && $longitude == 0.0)) {
+            return false;
+        }
+        $homeLatitude = round($this->ReadPropertyFloat('HomeLatitude'), 4);
+        $homeLongitude = round($this->ReadPropertyFloat('HomeLongitude'), 4);
+        $radius = $this->ReadPropertyInteger('HomeRadiusMeters');
+        if (!is_finite($homeLatitude) || !is_finite($homeLongitude) ||
+            abs($homeLatitude) > 90.0 || abs($homeLongitude) > 180.0 ||
+            ($homeLatitude == 0.0 && $homeLongitude == 0.0) ||
+            $radius < 25 || $radius > 5000) {
+            return false;
+        }
+        $dLat = deg2rad($latitude - $homeLatitude);
+        $dLon = deg2rad($longitude - $homeLongitude);
+        $a = sin($dLat / 2.0) ** 2
+            + cos(deg2rad($homeLatitude)) * cos(deg2rad($latitude))
+              * sin($dLon / 2.0) ** 2;
+        $distanceMeters = 2.0 * 6371000.0 * asin(min(1.0, sqrt(max(0.0, $a))));
+        return $distanceMeters <= $radius;
     }
 
     private function lastSeenAt(int $source): ?int
