@@ -144,6 +144,21 @@ function addValue(int $id, int $parent, string $key, $value): void
 }
 
 try {
+    // Symcon requires the module.json name to match its PHP class name.
+    // User-facing names belong exclusively in aliases.
+    foreach (['NRGCarDataVehicle', 'NRGCarDataVehicleTile'] as $moduleClass) {
+        $moduleDefinition = json_decode(
+            (string) file_get_contents(__DIR__ . '/../' . $moduleClass . '/module.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        testAssert(
+            str_replace(' ', '', $moduleDefinition['name']) === $moduleClass,
+            'module.json name matches PHP class: ' . $moduleClass
+        );
+    }
+
     $bmwGuid = '{E147D4C3-A21A-F7C9-EE09-F54D5FD91B86}';
     $adapterGuid = '{48F2EE15-0D72-40E4-8E94-612A178D554E}';
     $GLOBALS['ipsInstances'][100] = [
