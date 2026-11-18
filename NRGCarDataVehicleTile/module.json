@@ -1,10 +1,10 @@
 {
     "id":  "{9E4E3D3F-4414-4682-BFA9-781ACC4FB099}",
-    "name":  "NRGCarDataVehicleTile",
+    "name":  "BMW EMS-Kachel",
     "type":  3,
     "vendor":  "BMW Group",
     "aliases":  [
-                    "NRG-Stack CarData Fahrzeugkachel"
+                    "BMW EMS-Kachel"
                 ],
     "parentRequirements":  [
 

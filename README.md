@@ -1,4 +1,6 @@
-# NRG-Stack CarData – Fahrzeugadapter und Kachel
+# BMW EMS-Integration – Adapter und Fahrzeugkachel
+
+Die Module heißen im Symcon-Store **BMW EMS-Adapter** und **BMW EMS-Kachel**.
 
 Dieser Adapter verwendet **bestehende** Symcon-Instanzen von
 [`parcivad/ips-bmw-cardata`](https://github.com/parcivad/ips-bmw-cardata).
@@ -7,15 +9,19 @@ und das Anlegen der ausgewählten Variablen. Es wird kein zweiter Transport
 aufgebaut. Jedes BMW- oder MINI-Fahrzeug bekommt eine eigene Adapterinstanz,
 die auf die zugehörige BMW-CarData-Fahrzeuginstanz verweist.
 
-Der Adapter stellt `NRGCD_GetVehicleData($id)` als **lesenden, herstellerneutralen
-NRG-Stack-Fahrzeugvertrag v1.0** bereit. Alle im Vertrag definierten Schlüssel
-werden unabhängig von der Kachel geliefert; nicht verfügbare Messwerte bleiben
-`null` (Ausnahme: Bei unbekannter Position ist `atHome` ausdrücklich `false`). Die ältere Funktion `NRGCD_GetVehicleState($id)` (v1.6) bleibt aus
-Kompatibilitätsgründen unverändert verfügbar. Die Quellvariablen werden über den technischen BMW-Schlüssel
-gefunden (Ident = Schlüssel ohne Punkte). Für nicht
-gelieferte Felder stehen `null` bzw. `0` bei Variablen-IDs.
+Der Adapter stellt `NRGCD_GetVehicleData($id)` als **lesende,
+herstellerneutrale Fahrzeugschnittstelle** bereit.
 
-| NRG-Feld | BMW-CarData-Telematik |
+Setzt den analog Tessie (siehe [GitHub - DG65/NRGTessie · GitHub](http://github.com/DG65/NRGTessie)) den Fahrzeugvertrag `vehicle` 1.0 um.
+
+Alle im Vertrag definierten Schlüssel werden unabhängig von der Kachel geliefert;
+nicht verfügbare Messwerte bleiben `null`, auch `atHome` bei unbekannter Position.
+Die ältere Funktion `NRGCD_GetVehicleState($id)` (v1.6) bleibt aus
+Kompatibilitätsgründen unverändert verfügbar. Die Quellvariablen werden über
+den technischen BMW-Schlüssel gefunden (Ident = Schlüssel ohne Punkte).
+Für nicht gelieferte Felder stehen `null` bzw. `0` bei Variablen-IDs.
+
+| Vertragsfeld | BMW-CarData-Telematik |
 | --- | --- |
 | `soc`/`socID` | `vehicle.drivetrain.batteryManagement.header`; anschließend `vehicle.powertrain.electric.battery.stateOfCharge.displayed`; dann trip-end fallback |
 | `charging`/`chargingID` | `vehicle.drivetrain.electricEngine.charging.status`; anschließend `...hvStatus` und Portstatus |
@@ -32,10 +38,10 @@ gelieferte Felder stehen `null` bzw. `0` bei Variablen-IDs.
 | `atHome` | BMW-CarData-GPS-Felder `vehicle.cabin.infotainment.navigation.currentLocation.latitude` und `.longitude`; berechneter Abstand zum konfigurierten Heimstandort |
 | `bidirectionalCapable`, `dischargeAllowed`, `targetSocProfessionalPercent`, `departureRelevant` | Entsprechende BMW-CarData-Felder, sofern eindeutig als Boolean bzw. Prozentwert geliefert |
 
-Die übrigen NRG-Felder (`energyRemainingKwh`, geplante Abfahrt,
+Die übrigen Vertragsfelder (`energyRemainingKwh`, geplante Abfahrt,
 Navigation/Heimweg und Fahrzeugstatus) bleiben ohne belastbare BMW-Datenquelle
 `null`. Eine 0 wird nicht als Ersatz für unbekannte Messwerte verwendet.
-`manufacturer` ist entsprechend der NRG-Vorgabe fest `BMW`, auch wenn das
+`manufacturer` ist entsprechend dem Fahrzeugvertrag fest `BMW`, auch wenn das
 Quellmodul technisch MINI-Fahrzeuge unterstützt; `powertrain` bleibt unbekannt.
 
 **Heimposition im Fahrzeugadapter:** Optional aktivierbar; geografische Breite
@@ -43,8 +49,8 @@ und Länge werden mit jeweils vier Nachkommastellen eingegeben. Der Heimradius
 ist konfigurierbar (250 m als Standard, erlaubt sind 25 bis 5000 m). Die
 Berechnung verwendet die Haversine-Formel. Ohne aktivierte Heimposition oder
 bei fehlendem, unvollständigem oder ungültigem Fahrzeug-GPS-Paar, ebenso bei
-0/0, ist `atHome` **`false`**. Sonst gilt `true`, wenn die letzte bekannte
-Fahrzeugposition höchstens den Heimradius von den Heimkoordinaten entfernt ist.
+0/0, ist `atHome` **`null`**. Bei gültiger Position ist der Wert `true`,
+wenn das Fahrzeug innerhalb des Heimradius steht, andernfalls `false`.
 BMW-GPS-Messwerte können älter sein als der letzte Fahrzeugstatus; die
 GPS-Schlüssel müssen im BMW-CarData-Stream aktiviert sein.
 
@@ -59,9 +65,10 @@ letzten Variablenempfang in Symcon und nicht zwingend der Messzeit im Fahrzeug.
 angelegten** Variablen der ausgewählten CarData-Fahrzeuginstanz mit technischem
 Schlüssel, Wert, Datentyp und Symcon-Empfangszeit. 
 
-## Symcon-Kachel und BMW-Fahrzeugbild
+## BMW EMS-Kachel und BMW-Fahrzeugbild
 
-Das zweite Modul `NRGCarDataVehicleTile` ist eine unabhängige HTML-SDK-Kachel
+Die **BMW EMS-Kachel** (technischer Modulordner: `NRGCarDataVehicleTile`)
+ist eine unabhängige HTML-SDK-Kachel
 (`SetVisualizationType(1)`). Sie nutzt die lesenden Vertragsfunktionen
 des Adapters und zeigt:
 
@@ -71,7 +78,7 @@ des Adapters und zeigt:
 - Ladestand mit Balkenanzeige und Markierung des Ladelimits sowie Reichweite.
 - **Vier feste KPI-Plätze** für Kilometerstand, Verriegelung,
   verbleibende Zeit bis zum Ladeziel und Ladevorgang. Die Restladezeit stammt
-  aus dem NRG-Vertrag und wird nur beim Laden angezeigt; die Ladeleistung
+  aus dem Fahrzeugvertrag und wird nur beim Laden angezeigt; die Ladeleistung
   steht im Ladevorgangsfeld.
 - **Drei feste ergänzende Plätze** für Ladeanschluss, Türen/Heckklappe und
   Reifendruck aller vier Reifen (bar). Nicht gelieferte Daten erscheinen als

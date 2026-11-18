@@ -1,7 +1,7 @@
 {
   "id": "{9E042E51-D99A-4395-BC3A-7B0EDF19EB77}",
   "author": "Dirk Allard",
-  "name": "NRG-Stack CarData",
+  "name": "BMW EMS-Integration",
   "url": "https://github.com/DirkAllard/NRGCarData",
   "compatibility": {
     "version": "9.0"

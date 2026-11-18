@@ -1,10 +1,10 @@
 {
     "id":  "{48F2EE15-0D72-40E4-8E94-612A178D554E}",
-    "name":  "NRGCarDataVehicle",
+    "name":  "BMW EMS-Adapter",
     "type":  3,
     "vendor":  "BMW Group",
     "aliases":  [
-                    "NRG-Stack CarData Fahrzeugadapter"
+                    "BMW EMS-Adapter"
                 ],
     "parentRequirements":  [
 

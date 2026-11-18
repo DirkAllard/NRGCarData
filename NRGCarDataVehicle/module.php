@@ -215,7 +215,7 @@ class NRGCarDataVehicle extends IPSModule
             'connected' => $connected,
             'charging' => $charging,
             'chargeLimit' => $limit === null ? null : (int) round((float) $limit),
-            'atHome' => (bool) ($v['atHome'] ?? false),
+            'atHome' => $v['atHome'] ?? null,
             'batteryCapacityKwh' => $capacity,
             'lastSeenAt' => $this->lastSeenAt($source),
             'socID' => (int) ($v['socID'] ?? 0),
@@ -247,18 +247,18 @@ class NRGCarDataVehicle extends IPSModule
 
     /**
      * Calculate the home geofence from BMW CarData GPS variables.
-     * Incomplete, invalid and unavailable positions explicitly return false.
+     * Incomplete, invalid and unavailable positions return null.
      */
-    private function isAtHome(int $source): bool
+    private function isAtHome(int $source): ?bool
     {
         if ($source <= 0 || !$this->ReadPropertyBoolean('UseHomeLocation')) {
-            return false;
+            return null;
         }
         $latitude = $this->firstNumeric($source, self::FIELD_KEYS['latitude'], -90.0, 90.0)['value'] ?? null;
         $longitude = $this->firstNumeric($source, self::FIELD_KEYS['longitude'], -180.0, 180.0)['value'] ?? null;
         if ($latitude === null || $longitude === null ||
             ($latitude == 0.0 && $longitude == 0.0)) {
-            return false;
+            return null;
         }
         $homeLatitude = round($this->ReadPropertyFloat('HomeLatitude'), 4);
         $homeLongitude = round($this->ReadPropertyFloat('HomeLongitude'), 4);
@@ -267,7 +267,7 @@ class NRGCarDataVehicle extends IPSModule
             abs($homeLatitude) > 90.0 || abs($homeLongitude) > 180.0 ||
             ($homeLatitude == 0.0 && $homeLongitude == 0.0) ||
             $radius < 25 || $radius > 5000) {
-            return false;
+            return null;
         }
         $dLat = deg2rad($latitude - $homeLatitude);
         $dLon = deg2rad($longitude - $homeLongitude);

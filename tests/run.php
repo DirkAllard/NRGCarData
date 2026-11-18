@@ -197,7 +197,7 @@ try {
     testAssert($data['chargeState'] === 'charging' && $data['chargePowerW'] === 6400.0, 'NRG charging details');
     testAssert($data['chargeTimeRemainingMin'] === 28, 'NRG charging target time in minutes');
     testAssert($data['chargeAmpsRequest'] === 32.0, 'NRG charge amperes read independently of the tile');
-    testAssert($data['batteryCapacityKwh'] === null && $data['atHome'] === false, 'Unknown capacity is null; unknown location means not at home');
+    testAssert($data['batteryCapacityKwh'] === null && $data['atHome'] === null, 'Unknown capacity and unknown location are null');
     testAssert($data['lastSeenAt'] === 1700000900, 'NRG lastSeenAt from all available BMW variables');
     $contractKeys = [
         'contractType', 'contractVersion', 'instanceID', 'name', 'provider',
@@ -302,23 +302,23 @@ try {
     $vehicle->configure('HomeLatitude', 50.0000);
     $vehicle->configure('HomeLongitude', 8.0000);
     $vehicle->configure('HomeRadiusMeters', 250);
-    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Missing GPS pair => false');
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === null, 'Missing GPS pair => null');
     addValue(340, 100, 'vehicle.cabin.infotainment.navigation.currentLocation.latitude', 50.0005);
-    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Partial GPS pair => false');
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === null, 'Partial GPS pair => null');
     addValue(341, 100, 'vehicle.cabin.infotainment.navigation.currentLocation.longitude', 8.0005);
     testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === true, 'Inside geofence => true');
     testAssert(json_decode($vehicle->GetVehicleState(), true)['atHome'] === true, 'Contracts use same location');
     $GLOBALS['ipsVariables'][340]['value'] = 50.0100;
     testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Outside geofence => false');
     $GLOBALS['ipsVariables'][340]['value'] = 'invalid';
-    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Invalid GPS => false');
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === null, 'Invalid GPS => null');
     $GLOBALS['ipsVariables'][340]['value'] = 0.0;
     $GLOBALS['ipsVariables'][341]['value'] = 0.0;
-    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Uninitialised 0/0 => false');
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === null, 'Uninitialised 0/0 => null');
     $GLOBALS['ipsVariables'][340]['value'] = 50.0005;
     $GLOBALS['ipsVariables'][341]['value'] = 8.0005;
     $vehicle->configure('UseHomeLocation', false);
-    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === false, 'Disabled geofence => false');
+    testAssert(json_decode($vehicle->GetVehicleData(), true)['atHome'] === null, 'Disabled geofence => null');
     $vehicle->configure('UseHomeLocation', true);
     testAssert(str_contains($vehicle->GetConfigurationForm(), '"digits":4'), 'Four decimal input for coordinates');
 
