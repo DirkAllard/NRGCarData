@@ -1,10 +1,10 @@
 {
     "id":  "{9E4E3D3F-4414-4682-BFA9-781ACC4FB099}",
-    "name":  "BMW EMS-Kachel",
+    "name":  "BMW Fahrzeugkachel",
     "type":  3,
     "vendor":  "BMW Group",
     "aliases":  [
-                    "BMW EMS-Kachel"
+                    "BMW Fahrzeugkachel"
                 ],
     "parentRequirements":  [
 

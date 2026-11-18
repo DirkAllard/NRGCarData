@@ -1,6 +1,8 @@
-# BMW EMS-Integration – Adapter und Fahrzeugkachel
+# BMW Fahrzeugdaten – Datenadapter und Kachel
 
-Die Module heißen im Symcon-Store **BMW EMS-Adapter** und **BMW EMS-Kachel**.
+Die Module heißen im Symcon-Store **BMW Datenadapter** und **BMW Fahrzeugkachel**.
+Der Adapter bereitet Fahrzeugdaten zur Weiterverarbeitung auf; die Kachel
+stellt ausgewählte Fahrzeugwerte übersichtlich dar.
 
 Dieser Adapter verwendet **bestehende** Symcon-Instanzen von
 [`parcivad/ips-bmw-cardata`](https://github.com/parcivad/ips-bmw-cardata).
@@ -65,9 +67,9 @@ letzten Variablenempfang in Symcon und nicht zwingend der Messzeit im Fahrzeug.
 angelegten** Variablen der ausgewählten CarData-Fahrzeuginstanz mit technischem
 Schlüssel, Wert, Datentyp und Symcon-Empfangszeit. 
 
-## BMW EMS-Kachel und BMW-Fahrzeugbild
+## BMW Fahrzeugkachel und BMW-Fahrzeugbild
 
-Die **BMW EMS-Kachel** (technischer Modulordner: `NRGCarDataVehicleTile`)
+Die **BMW Fahrzeugkachel** (technischer Modulordner: `NRGCarDataVehicleTile`)
 ist eine unabhängige HTML-SDK-Kachel
 (`SetVisualizationType(1)`). Sie nutzt die lesenden Vertragsfunktionen
 des Adapters und zeigt:
